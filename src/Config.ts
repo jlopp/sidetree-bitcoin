@@ -5,7 +5,8 @@ export enum ConfigKey {
   BitcoreSidetreeServiceUri = 'bitcoreSidetreeServiceUri',
   SidetreeTransactionPrefix = 'sidetreeTransactionPrefix',
   BitcoinSidetreeGenesisBlockNumber = 'bitcoinSidetreeGenesisBlockNumber',
-  BitcoinSidetreeGenesisBlockHash = 'bitcoinSidetreeGenesisBlockHash'
+  BitcoinSidetreeGenesisBlockHash = 'bitcoinSidetreeGenesisBlockHash',
+  BitcoinPollingInternalSeconds = 'bitcoinPollingInternalSeconds'
 }
 
 /**
