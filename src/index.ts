@@ -16,7 +16,8 @@ const prefix = config[ConfigKey.SidetreeTransactionPrefix];
 const genesisTransactionNumber = TransactionNumber.construct(Number(config[ConfigKey.BitcoinSidetreeGenesisBlockNumber]), 0);
 const genesisTimeHash = config[ConfigKey.BitcoinSidetreeGenesisBlockHash];
 const bitcoinPollingInternalSeconds = Number(config[ConfigKey.BitcoinPollingInternalSeconds]);
-const blockchainService = new BlockchainService(uri, prefix, genesisTransactionNumber, genesisTimeHash, bitcoinPollingInternalSeconds);
+const maxSidetreeTransactions = Number(config[ConfigKey.MaxSidetreeTransactions]);
+const blockchainService = new BlockchainService(uri, prefix, genesisTransactionNumber, genesisTimeHash, bitcoinPollingInternalSeconds, maxSidetreeTransactions);
 
 const app = new Koa();
 
@@ -37,7 +38,7 @@ router.get('/transactions', async (ctx, _next) => {
     const response = await blockchainService.requestHandler.handleFetchRequest(since, transactionTimeHash);
     setKoaResponse(response, ctx.response);
   } else {
-    const response = await blockchainService.requestHandler.handleFetchRequest();
+    const response = await blockchainService.handleFetchRequest();
     setKoaResponse(response, ctx.response);
   }
 });

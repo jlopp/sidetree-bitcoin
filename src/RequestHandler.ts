@@ -125,7 +125,7 @@ export default class RequestHandler {
   /**
    * Verifies whether the tuple (@param transactionNumber, @param transactionTimeHash) are valid on the blockchain
    */
-  private async verifyTransactionTimeHash (transactionNumber: number, transactionTimeHash: string): Promise<Response> {
+  public async verifyTransactionTimeHash (transactionNumber: number, transactionTimeHash: string): Promise<Response> {
     const errorResponse = {
       status: ResponseStatus.ServerError
     };

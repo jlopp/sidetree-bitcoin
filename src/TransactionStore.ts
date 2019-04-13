@@ -1,5 +1,6 @@
 import SortedArray from './lib/SortedArray';
 import Transaction from './Transaction';
+import { Response, ResponseStatus } from './Response';
 
 /**
  * An abstraction for the caching transactions that have been found on the blockchain.
@@ -68,6 +69,53 @@ export class InMemoryTransactionStore implements TransactionStore {
     }
     return exponentiallySpacedTransactions;
   }
+
+  /**
+   * Returns at most @param max transactions with transactionNumber greater than @param transactionNumber
+   * If @param transactionNumber is undefined, returns transactions from index 0 in the store
+   */
+  async getTransactionsLaterThan (max: number, transactionNumber?: number): Promise<Response> {
+    let responseTransactions = [];
+    let startIndex = 0;
+
+    // If given `undefined`, return from index 0
+    if (transactionNumber === undefined) {
+      startIndex = 0;
+    } else {
+      // Locate the index of the given transaction using binary search.
+      const compareTransactionAndTransactionNumber
+        = (transaction: Transaction, transactionNumber: number) => { return transaction.transactionNumber - transactionNumber; };
+      const bestKnownValidRecentTransactionIndex
+        = SortedArray.binarySearch(this.transactions, transactionNumber, compareTransactionAndTransactionNumber);
+
+      // The following condition occurs if there was a blockchain reorganization
+      if (bestKnownValidRecentTransactionIndex === undefined) {
+        return {
+          'status': ResponseStatus.BadRequest,
+          'body': {
+            'transactions': []
+          }
+        };
+      } else {
+        startIndex = bestKnownValidRecentTransactionIndex + 1;
+      }
+
+    }
+
+    for (let i = startIndex; i < max; i++) {
+      if (i > this.transactions.length) {
+        break;
+      }
+      responseTransactions.push(this.transactions[i]);
+    }
+    return {
+      'status': ResponseStatus.Succeeded,
+      'body': {
+        'transactions': responseTransactions
+      }
+    };
+  }
+
   async removeTransactionsLaterThan (transactionNumber?: number): Promise<void> {
     // If given `undefined`, remove all transactions.
     if (transactionNumber === undefined) {

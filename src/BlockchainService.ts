@@ -1,7 +1,7 @@
 import { InMemoryTransactionStore } from './TransactionStore';
 import Transaction from './Transaction';
 import RequestHandler from './RequestHandler';
-import { ResponseStatus } from './Response';
+import { Response, ResponseStatus } from './Response';
 
 /**
  * The core class that is instantiated when running a Sidetree blockchain service.
@@ -32,11 +32,12 @@ export default class BlockchainService {
    * @param genesisTimeHash the corresponding timehash of genesis transaction number
    * @param pollingIntervalInSeconds time interval for the background task on polling Bitcoin blockchain
    */
-  public constructor(public bitcoreSidetreeServiceUri: string,
+  public constructor (public bitcoreSidetreeServiceUri: string,
     public sidetreeTransactionPrefix: string,
     public genesisTransactionNumber: number,
     public genesisTimeHash: string,
-    private pollingIntervalInSeconds: number) {
+    private pollingIntervalInSeconds: number,
+    private maxSidetreeTransactions: number) {
     this.requestHandler = new RequestHandler(bitcoreSidetreeServiceUri, sidetreeTransactionPrefix, genesisTransactionNumber, genesisTimeHash);
 
   }
@@ -172,6 +173,87 @@ export default class BlockchainService {
 
       // Reset the in-memory last known good Tranaction so we next processing cycle will fetch from the correct timestamp/maker.
       this.lastKnownTransaction = bestKnownValidRecentTransactionBody;
+    }
+  }
+
+  /**
+   * Handles the fetch request from cache
+   * @param sinceOptional specifies the minimum Sidetree transaction number that the caller is interested in
+   * @param transactionTimeHashOptional specifies the transactionTimeHash corresponding to the since parameter
+   */
+  public async handleFetchRequest (sinceOptional?: number, transactionTimeHashOptional?: string): Promise<Response> {
+
+    const errorResponse = {
+      status: ResponseStatus.ServerError,
+      body: {}
+    };
+
+    let sinceTransactionNumber = this.genesisTransactionNumber;
+    let transactionTimeHash = this.genesisTimeHash;
+
+    // determine default values for optional parameters
+    if (sinceOptional !== undefined) {
+      sinceTransactionNumber = sinceOptional;
+
+      if (transactionTimeHashOptional !== undefined) {
+        transactionTimeHash = transactionTimeHashOptional;
+      } else {
+        // if since was supplied, transactionTimeHash must exist
+        return {
+          status: ResponseStatus.BadRequest
+        };
+      }
+    }
+
+    const reorgResponse = {
+      status: ResponseStatus.BadRequest,
+      body: {
+        'code': 'invalid_transaction_number_or_time_hash'
+      }
+    };
+
+    // verify the validity of since and transactionTimeHash
+    const verifyResponse = await this.requestHandler.verifyTransactionTimeHash(sinceTransactionNumber, transactionTimeHash);
+    if (verifyResponse.status === ResponseStatus.Succeeded) {
+      const verifyResponseBody = verifyResponse.body as any;
+
+      // return HTTP 400 if the requested transactionNumber does not match the transactionTimeHash
+      if (verifyResponseBody['match'] === false) {
+        return reorgResponse;
+      }
+    } else {
+      // an error occured, so return the default response
+      return errorResponse;
+    }
+
+    const response = await this.transactionStore.getTransactionsLaterThan(this.maxSidetreeTransactions, sinceTransactionNumber);
+    if (response.status === ResponseStatus.Succeeded) {
+      const responseBody = response.body as any;
+      let moreTransactions;
+
+      if (this.lastKnownTransaction === undefined) {
+        moreTransactions = false;
+      } else {
+        if (responseBody.transactions[responseBody.transactions.length - 1].transactionNumber < this.lastKnownTransaction) {
+          moreTransactions = true;
+        } else {
+          moreTransactions = false;
+        }
+      }
+
+      return {
+        status: ResponseStatus.Succeeded,
+        body: {
+          'moreTransactions': moreTransactions,
+          'transactions': responseBody.transactions
+        }
+      };
+
+    } else if (response.status === ResponseStatus.BadRequest) {
+      return reorgResponse;
+    } else {
+      // an error occured, so return the default response
+      return errorResponse;
     }
   }
 }

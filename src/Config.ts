@@ -6,7 +6,8 @@ export enum ConfigKey {
   SidetreeTransactionPrefix = 'sidetreeTransactionPrefix',
   BitcoinSidetreeGenesisBlockNumber = 'bitcoinSidetreeGenesisBlockNumber',
   BitcoinSidetreeGenesisBlockHash = 'bitcoinSidetreeGenesisBlockHash',
-  BitcoinPollingInternalSeconds = 'bitcoinPollingInternalSeconds'
+  BitcoinPollingInternalSeconds = 'bitcoinPollingInternalSeconds',
+  MaxSidetreeTransactions = 'maxSidetreeTransactions'
 }
 
 /**
