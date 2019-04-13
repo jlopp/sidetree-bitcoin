@@ -35,7 +35,7 @@ router.get('/transactions', async (ctx, _next) => {
   if ('since' in params && 'transaction-time-hash' in params) {
     const since = Number(params['since']);
     const transactionTimeHash = String(params['transaction-time-hash']);
-    const response = await blockchainService.requestHandler.handleFetchRequest(since, transactionTimeHash);
+    const response = await blockchainService.handleFetchRequest(since, transactionTimeHash);
     setKoaResponse(response, ctx.response);
   } else {
     const response = await blockchainService.handleFetchRequest();
