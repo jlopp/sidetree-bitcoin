@@ -75,7 +75,7 @@ export class InMemoryTransactionStore implements TransactionStore {
    * If @param transactionNumber is undefined, returns transactions from index 0 in the store
    */
   async getTransactionsLaterThan (max: number, transactionNumber?: number): Promise<Response> {
-    let responseTransactions = [];
+
     let startIndex = 0;
 
     // If given `undefined`, return from index 0
@@ -102,12 +102,21 @@ export class InMemoryTransactionStore implements TransactionStore {
 
     }
 
-    for (let i = startIndex; i < max; i++) {
-      if (i > this.transactions.length) {
+    let responseTransactions = [];
+    let i = startIndex;
+    do {
+      if (i >= this.transactions.length) {
         break;
       }
+
       responseTransactions.push(this.transactions[i]);
-    }
+
+      if (responseTransactions.length >= max) {
+        break;
+      }
+      i = i + 1;
+    } while (true);
+
     return {
       'status': ResponseStatus.Succeeded,
       'body': {

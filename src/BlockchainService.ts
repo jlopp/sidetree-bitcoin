@@ -80,7 +80,7 @@ export default class BlockchainService {
         try {
           console.info('Fetching Sidetree transactions from bitcored service...');
           readResult = await this.requestHandler.handleFetchRequest(lastKnownTransactionNumber, lastKnownTransactionTimeHash);
-          console.info('Status is ' + readResult.status);
+
           // check if the request succeeded; if yes, process transactions
           if (readResult.status === ResponseStatus.Succeeded) {
             const readResultBody = readResult.body as any;
@@ -90,8 +90,9 @@ export default class BlockchainService {
               console.info(`Fetched ${transactions.length} Sidetree transactions from blockchain service ${transactions[0].transactionNumber}`);
               for (const transaction of transactions) {
                 await this.transactionStore.addTransaction(transaction);
-                this.lastKnownTransaction = await this.transactionStore.getLastTransaction();
               }
+              this.lastKnownTransaction = await this.transactionStore.getLastTransaction();
+              console.info('lastKnownTransaction' + JSON.stringify(this.lastKnownTransaction));
             }
           } else if (readResult.status === ResponseStatus.BadRequest) {
             const readResultBody = readResult.body as any;
@@ -216,7 +217,8 @@ export default class BlockchainService {
       if (this.lastKnownTransaction === undefined) {
         moreTransactions = false;
       } else {
-        if (responseBody.transactions[responseBody.transactions.length - 1].transactionNumber < this.lastKnownTransaction) {
+        if (responseBody.transactions.length > 0 &&
+          responseBody.transactions[responseBody.transactions.length - 1].transactionNumber < this.lastKnownTransaction.transactionNumber) {
           moreTransactions = true;
         } else {
           moreTransactions = false;
