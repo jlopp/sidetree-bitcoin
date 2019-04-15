@@ -4,7 +4,7 @@ import RequestHandler from './RequestHandler';
 import { Response, ResponseStatus } from './Response';
 
 /**
- * The core class that is instantiated when running a Sidetree blockchain service.
+ * The class that is instantiated when running a Sidetree blockchain service.
  */
 export default class BlockchainService {
 
@@ -14,15 +14,13 @@ export default class BlockchainService {
   public requestHandler: RequestHandler;
 
   /**
-   * Denotes if the periodic transaction processing should continue to occur.
-   * Used mainly for test purposes.
-   */
-  private continuePeriodicProcessing = false;
-
-  /**
    * Data store that stores the state of transactions.
    */
   private transactionStore = new InMemoryTransactionStore();
+
+  /**
+   * Tracks the last known Sidetree transaction
+   */
   private lastKnownTransaction: Transaction | undefined;
 
   /**
@@ -32,14 +30,13 @@ export default class BlockchainService {
    * @param genesisTimeHash the corresponding timehash of genesis transaction number
    * @param pollingIntervalInSeconds time interval for the background task on polling Bitcoin blockchain
    */
-  public constructor (public bitcoreSidetreeServiceUri: string,
+  public constructor(public bitcoreSidetreeServiceUri: string,
     public sidetreeTransactionPrefix: string,
     public genesisTransactionNumber: number,
     public genesisTimeHash: string,
     private pollingIntervalInSeconds: number,
     private maxSidetreeTransactions: number) {
     this.requestHandler = new RequestHandler(bitcoreSidetreeServiceUri, sidetreeTransactionPrefix, genesisTransactionNumber, genesisTimeHash);
-
   }
 
   /**
@@ -59,42 +56,31 @@ export default class BlockchainService {
 
     console.info(`Starting periodic transactions polling.`);
     setImmediate(async () => {
-      this.continuePeriodicProcessing = true;
-
       // tslint:disable-next-line:no-floating-promises - this.processTransactions() never throws.
       this.processTransactions();
     });
   }
 
   /**
-   * Stops periodic transaction processing.
-   * Mainly used for test purposes.
-   */
-  public stopPeriodicProcessing () {
-    console.info(`Stopped periodic transactions polling.`);
-    this.continuePeriodicProcessing = false;
-  }
-
-  /**
-   * Processes new transactions if any,
-   * then scehdules the next round of processing using the following rules unless `stopPeriodicProcessing()` is invoked.
+   * Processes new transactions if any, and then scehdules the next round of processing
    */
   public async processTransactions () {
-    let blockReorganizationDetected = false;
+
     try {
       // Keep fetching new Sidetree transactions from blockchain
       // until there are no more new transactions or there is a block reorganization.
       let moreTransactions = false;
       do {
+        let blockReorganizationDetected = false;
         // Get the last transaction to be used as a timestamp to fetch new transactions.
         const lastKnownTransactionNumber = this.lastKnownTransaction ? this.lastKnownTransaction.transactionNumber : undefined;
         const lastKnownTransactionTimeHash = this.lastKnownTransaction ? this.lastKnownTransaction.transactionTimeHash : undefined;
 
         let readResult;
         try {
-          console.info('Fetching Sidetree transactions from blockchain service...');
+          console.info('Fetching Sidetree transactions from bitcored service...');
           readResult = await this.requestHandler.handleFetchRequest(lastKnownTransactionNumber, lastKnownTransactionTimeHash);
-
+          console.info('Status is ' + readResult.status);
           // check if the request succeeded; if yes, process transactions
           if (readResult.status === ResponseStatus.Succeeded) {
             const readResultBody = readResult.body as any;
@@ -102,16 +88,16 @@ export default class BlockchainService {
             moreTransactions = readResultBody['moreTransactions'];
             if (transactions.length > 0) {
               console.info(`Fetched ${transactions.length} Sidetree transactions from blockchain service ${transactions[0].transactionNumber}`);
-            }
-
-            for (const transaction of transactions) {
-              await this.transactionStore.addTransaction(transaction);
-              this.lastKnownTransaction = await this.transactionStore.getLastTransaction();
+              for (const transaction of transactions) {
+                await this.transactionStore.addTransaction(transaction);
+                this.lastKnownTransaction = await this.transactionStore.getLastTransaction();
+              }
             }
           } else if (readResult.status === ResponseStatus.BadRequest) {
             const readResultBody = readResult.body as any;
             const code = readResultBody['code'];
             if (code === 'invalid_transaction_number_or_time_hash') {
+              console.info(`Detected blockchain reorganization`);
               blockReorganizationDetected = true;
             }
           }
@@ -121,8 +107,6 @@ export default class BlockchainService {
 
         // If block reorg is detected, revert invalid transactions
         if (blockReorganizationDetected) {
-          console.info(`Block reorganization detected.`);
-
           console.info(`Reverting invalid transactions...`);
           await this.RevertInvalidTransactions();
           console.info(`Completed reverting invalid transactions.`);
@@ -132,18 +116,16 @@ export default class BlockchainService {
       console.error(`Encountered unhandled and possibly fatal error, must investigate and fix:`);
       console.error(error);
     } finally {
-      if (this.continuePeriodicProcessing) {
-        console.info(`Waiting for ${this.pollingIntervalInSeconds} seconds before fetching and processing transactions again.`);
-        setTimeout(async () => this.processTransactions(), this.pollingIntervalInSeconds * 1000);
-      }
+      console.info(`Waiting for ${this.pollingIntervalInSeconds} seconds before fetching and processing transactions again.`);
+      setTimeout(async () => this.processTransactions(), this.pollingIntervalInSeconds * 1000);
     }
   }
 
   /**
-   * Reverts invalid transactions. Used in the event of a block-reorganization.
+   * Reverts invalid transactions. Used in the event of a blockchain reorganization.
    */
   private async RevertInvalidTransactions () {
-    // Compute a list of exponentially-spaced transactions with their index, starting from the last transaction of the processed transactions.
+    // Compute a list of exponentially-spaced transactions with their index, starting from the last known transaction
     const exponentiallySpacedTransactions = await this.transactionStore.getExponentiallySpacedTransactions();
 
     let transactionList = [];
@@ -171,7 +153,7 @@ export default class BlockchainService {
       console.info(`Best known valid recent transaction: ${bestKnownValidRecentTransactionNumber}`);
       await this.transactionStore.removeTransactionsLaterThan(bestKnownValidRecentTransactionNumber);
 
-      // Reset the in-memory last known good Tranaction so we next processing cycle will fetch from the correct timestamp/maker.
+      // Reset the in-memory last known good Tranaction so we next processing cycle will fetch from the correct timestamp
       this.lastKnownTransaction = bestKnownValidRecentTransactionBody;
     }
   }
