@@ -35,10 +35,10 @@ router.get('/transactions', async (ctx, _next) => {
   if ('since' in params && 'transaction-time-hash' in params) {
     const since = Number(params['since']);
     const transactionTimeHash = String(params['transaction-time-hash']);
-    const response = await blockchainService.handleFetchRequest(since, transactionTimeHash);
+    const response = await blockchainService.handleFetchRequestCached(since, transactionTimeHash);
     setKoaResponse(response, ctx.response);
   } else {
-    const response = await blockchainService.handleFetchRequest();
+    const response = await blockchainService.handleFetchRequestCached();
     setKoaResponse(response, ctx.response);
   }
 });
@@ -49,7 +49,7 @@ router.post('/transactions', async (ctx, _next) => {
 });
 
 router.post('/transactions/firstValid', async (ctx, _next) => {
-  const response = await blockchainService.requestHandler.handleFirstValidRequest(ctx.body);
+  const response = await blockchainService.handleFirstValidRequestCached(ctx.body);
   setKoaResponse(response, ctx.response);
 });
 

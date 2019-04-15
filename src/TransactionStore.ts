@@ -71,6 +71,31 @@ export class InMemoryTransactionStore implements TransactionStore {
   }
 
   /**
+   * Returns a transaction from the cache at the requested index
+   * @param index The location of the requested transaction
+   */
+  async getTransaction (index: number): Promise<Transaction | undefined> {
+    if (index >= this.transactions.length) {
+      return undefined;
+    } else {
+      return this.transactions[index];
+    }
+  }
+
+  /**
+   * Locates a transactionNumber in the transactionStore using binary search
+   * @param transactionNumber The transactionNumber for which the index is requested
+   */
+  async locateTransactionIndex (transactionNumber: number): Promise<number | undefined> {
+    // Locate the index of the given transaction using binary search.
+    const compareTransactionAndTransactionNumber
+      = (transaction: Transaction, transactionNumber: number) => { return transaction.transactionNumber - transactionNumber; };
+    const transactionIndex
+      = SortedArray.binarySearch(this.transactions, transactionNumber, compareTransactionAndTransactionNumber);
+    return transactionIndex;
+  }
+
+  /**
    * Returns at most @param max transactions with transactionNumber greater than @param transactionNumber
    * If @param transactionNumber is undefined, returns transactions from index 0 in the store
    */
@@ -83,10 +108,7 @@ export class InMemoryTransactionStore implements TransactionStore {
       startIndex = 0;
     } else {
       // Locate the index of the given transaction using binary search.
-      const compareTransactionAndTransactionNumber
-        = (transaction: Transaction, transactionNumber: number) => { return transaction.transactionNumber - transactionNumber; };
-      const bestKnownValidRecentTransactionIndex
-        = SortedArray.binarySearch(this.transactions, transactionNumber, compareTransactionAndTransactionNumber);
+      const bestKnownValidRecentTransactionIndex = await this.locateTransactionIndex(transactionNumber);
 
       // The following condition occurs if there was a blockchain reorganization
       if (bestKnownValidRecentTransactionIndex === undefined) {
@@ -133,17 +155,14 @@ export class InMemoryTransactionStore implements TransactionStore {
     }
 
     // Locate the index of the given transaction using binary search.
-    const compareTransactionAndTransactionNumber
-      = (transaction: Transaction, transactionNumber: number) => { return transaction.transactionNumber - transactionNumber; };
-    const bestKnownValidRecentTransactionIndex
-      = SortedArray.binarySearch(this.transactions, transactionNumber, compareTransactionAndTransactionNumber);
+    const bestKnownValidRecentTransactionIndex = await this.locateTransactionIndex(transactionNumber);
 
     // The following conditions should never be possible.
     if (bestKnownValidRecentTransactionIndex === undefined) {
       throw Error(`Unable to locate transction: ${transactionNumber}`);
+    } else {
+      console.info(`Reverting ${this.transactions.length - bestKnownValidRecentTransactionIndex - 1} transactions...`);
+      this.transactions.splice(bestKnownValidRecentTransactionIndex + 1);
     }
-
-    console.info(`Reverting ${this.transactions.length - bestKnownValidRecentTransactionIndex - 1} transactions...`);
-    this.transactions.splice(bestKnownValidRecentTransactionIndex + 1);
   }
 }

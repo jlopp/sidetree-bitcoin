@@ -30,7 +30,7 @@ export default class BlockchainService {
    * @param genesisTimeHash the corresponding timehash of genesis transaction number
    * @param pollingIntervalInSeconds time interval for the background task on polling Bitcoin blockchain
    */
-  public constructor(public bitcoreSidetreeServiceUri: string,
+  public constructor (public bitcoreSidetreeServiceUri: string,
     public sidetreeTransactionPrefix: string,
     public genesisTransactionNumber: number,
     public genesisTimeHash: string,
@@ -159,11 +159,54 @@ export default class BlockchainService {
   }
 
   /**
+   * Verifies whether the tuple (@param transactionNumber, @param transactionTimeHash) are valid on the cache's view of the blockchain
+   */
+  public async verifyTransactionTimeHashCached (transactionNumber: number, transactionTimeHash: string): Promise<Response> {
+    const errorResponse = {
+      status: ResponseStatus.ServerError
+    };
+
+    try {
+      const cacheIndex = await this.transactionStore.locateTransactionIndex(transactionNumber);
+      let match = true;
+
+      // if we can't locate the requested transaction, return false;
+      if (cacheIndex === undefined) {
+        match = false;
+      } else {
+        const cachedTransaction = await this.transactionStore.getTransaction(cacheIndex);
+
+        // if we can't locate the transaction in the cache at the index, return false
+        if (cachedTransaction === undefined) {
+          match = false;
+        } else {
+
+          // if cached transaction doesn't match the caller's parameters, return false
+          if (cachedTransaction.transactionNumber !== transactionNumber || cachedTransaction.transactionTimeHash !== transactionTimeHash) {
+            match = false;
+          } else {
+            match = true;
+          }
+        }
+      }
+
+      return {
+        status: ResponseStatus.Succeeded,
+        body: {
+          'match': match
+        }
+      };
+    } catch {
+      return errorResponse;
+    }
+  }
+
+  /**
    * Handles the fetch request from cache
    * @param sinceOptional specifies the minimum Sidetree transaction number that the caller is interested in
    * @param transactionTimeHashOptional specifies the transactionTimeHash corresponding to the since parameter
    */
-  public async handleFetchRequest (sinceOptional?: number, transactionTimeHashOptional?: string): Promise<Response> {
+  public async handleFetchRequestCached (sinceOptional?: number, transactionTimeHashOptional?: string): Promise<Response> {
 
     const errorResponse = {
       status: ResponseStatus.ServerError,
@@ -195,7 +238,7 @@ export default class BlockchainService {
     };
 
     // verify the validity of since and transactionTimeHash
-    const verifyResponse = await this.requestHandler.verifyTransactionTimeHash(sinceTransactionNumber, transactionTimeHash);
+    const verifyResponse = await this.verifyTransactionTimeHashCached(sinceTransactionNumber, transactionTimeHash);
     if (verifyResponse.status === ResponseStatus.Succeeded) {
       const verifyResponseBody = verifyResponse.body as any;
 
@@ -237,6 +280,66 @@ export default class BlockchainService {
     } else {
       // an error occured, so return the default response
       return errorResponse;
+    }
+  }
+
+  /**
+   * Handles the firstValid request using the cache
+   * @param requestBody Request body containing the list of transactions to be validated
+   */
+  public async handleFirstValidRequestCached (requestBody: Buffer): Promise<Response> {
+    const jsonBody = JSON.parse(requestBody.toString());
+    const transactions = jsonBody.transactions;
+
+    // Respond with 'bad request' if no transactions list were provided
+    if (!transactions) {
+      return {
+        status: ResponseStatus.BadRequest
+      };
+    }
+
+    try {
+      const transactionsObj = jsonBody['transactions'];
+      for (let i = 0; i < transactionsObj.length; i++) {
+        const transaction = transactionsObj[i];
+        const transactionNumber = transaction['transactionNumber'];
+        const transactionTime = transaction['transactionTime'];
+        const transactionTimeHash = transaction['transactionTimeHash'];
+        const anchorFileHash = transaction['anchorFileHash'];
+
+        // make a call to verify if the tuple (transactionNumber, transactionTimeHash) are valid
+        const verifyResponse = await this.verifyTransactionTimeHashCached(transactionNumber, transactionTimeHash);
+
+        // check if the request succeeded
+        if (verifyResponse.status !== ResponseStatus.Succeeded) {
+          // an error occured, so return the default response
+          return {
+            status: ResponseStatus.ServerError
+          };
+        }
+
+        const verifyResponseBody = verifyResponse.body as any;
+        // check if there was a match; if so return
+        if (Boolean(verifyResponseBody['match']) === true) {
+          return {
+            status: ResponseStatus.Succeeded,
+            body: {
+              'transactionNumber': transactionNumber,
+              'transactionTime': transactionTime,
+              'transactionTimeHash': transactionTimeHash,
+              'anchorFileHash': anchorFileHash
+            }
+          };
+        }
+      }
+      // none of the (transactionNumber, transactionTimeHash) tuples is valid, so return 404 NOT FOUND
+      return {
+        status: ResponseStatus.NotFound
+      };
+    } catch {
+      return {
+        status: ResponseStatus.ServerError
+      };
     }
   }
 }
