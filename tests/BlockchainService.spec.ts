@@ -18,10 +18,7 @@ describe('BlockchainService', () => {
 
 
   it('should return the HTTP 400 for reogranized transactions request', async () => {
-
     blockchainService.initialize();
-
-
     await retry(async (_bail: any) => {
       const transactionCount = await blockchainService.getTransactionsCount();
       if (transactionCount >= 20) {
@@ -54,7 +51,6 @@ describe('BlockchainService', () => {
   }
 
   it('should return the correct response body with content for cached transactions request', async () => {
-
     blockchainService.initialize();
 
     const transactionCount = await blockchainService.getTransactionsCount();
@@ -136,7 +132,6 @@ describe('BlockchainService', () => {
 
   it('should return the correct response body with content for firstValidCached request', async () => {
     blockchainService.initialize();
-
     await retry(async (_bail: any) => {
       const transactionCount = await blockchainService.getTransactionsCount();
       if (transactionCount >= 200) {
