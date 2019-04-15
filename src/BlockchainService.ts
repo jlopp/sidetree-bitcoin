@@ -24,6 +24,12 @@ export default class BlockchainService {
   private lastKnownTransaction: Transaction | undefined;
 
   /**
+   * Denotes if the periodic transaction processing should continue to occur.
+   * Used mainly for test purposes.
+   */
+  private continuePeriodicProcessing = false;
+
+  /**
    * @param bitcoreSidetreeServiceUri URI for the blockchain service
    * @param sidetreeTransactionPrefix prefix used to identify Sidetree transactions in Bitcoin's blockchain
    * @param genesisTransactionNumber the first Sidetree transaction number in Bitcoin's blockchain
@@ -56,9 +62,20 @@ export default class BlockchainService {
 
     console.info(`Starting periodic transactions polling.`);
     setImmediate(async () => {
+      this.continuePeriodicProcessing = true;
+
       // tslint:disable-next-line:no-floating-promises - this.processTransactions() never throws.
       this.processTransactions();
     });
+  }
+
+  /**
+   * Stops periodic transaction processing.
+   * Mainly used for test purposes.
+   */
+  public stopPeriodicProcessing () {
+    console.info(`Stopped periodic transactions processing.`);
+    this.continuePeriodicProcessing = false;
   }
 
   /**
@@ -116,8 +133,10 @@ export default class BlockchainService {
       console.error(`Encountered unhandled and possibly fatal error, must investigate and fix:`);
       console.error(error);
     } finally {
-      console.info(`Waiting for ${this.pollingIntervalInSeconds} seconds before fetching and processing transactions again.`);
-      setTimeout(async () => this.processTransactions(), this.pollingIntervalInSeconds * 1000);
+      if (this.continuePeriodicProcessing) {
+        console.info(`Waiting for ${this.pollingIntervalInSeconds} seconds before fetching and processing transactions again.`);
+        setTimeout(async () => this.processTransactions(), this.pollingIntervalInSeconds * 1000);
+      }
     }
   }
 
@@ -341,5 +360,12 @@ export default class BlockchainService {
         status: ResponseStatus.ServerError
       };
     }
+  }
+
+  /**
+   * Returns the number of transactions in the cache
+   */
+  public async getTransactionsCount (): Promise<number> {
+    return this.transactionStore.getTransactionsCount();
   }
 }

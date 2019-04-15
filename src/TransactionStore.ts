@@ -8,6 +8,11 @@ import { Response, ResponseStatus } from './Response';
 export interface TransactionStore {
 
   /**
+   * Returns the number of transactions in the store
+   */
+  getTransactionsCount (): Promise<number>;
+
+  /**
    * Idempotent method that adds the given transaction to the list of transactions.
    */
   addTransaction (transaction: Transaction): Promise<void>;
@@ -24,6 +29,24 @@ export interface TransactionStore {
   getExponentiallySpacedTransactions (): Promise<Transaction[]>;
 
   /**
+   * Returns a transaction from the cache at the requested index
+   * @param index The location of the requested transaction
+   */
+  getTransaction (index: number): Promise<Transaction | undefined>;
+
+  /**
+   * Locates a transactionNumber in the transactionStore using binary search
+   * @param transactionNumber The transactionNumber for which the index is requested
+   */
+  locateTransactionIndex (transactionNumber: number): Promise<number | undefined>;
+
+  /**
+   * Returns at most @param max transactions with transactionNumber greater than @param transactionNumber
+   * If @param transactionNumber is undefined, returns transactions from index 0 in the store
+   */
+  getTransactionsLaterThan (max: number, transactionNumber?: number): Promise<Response>;
+
+  /**
    * Remove all transactions with transaction number greater than the provided parameter.
    * If `undefined` is given, remove all transactions.
    */
@@ -35,6 +58,10 @@ export interface TransactionStore {
  */
 export class InMemoryTransactionStore implements TransactionStore {
   private transactions: Transaction[] = [];
+
+  async getTransactionsCount (): Promise<number> {
+    return this.transactions.length;
+  }
 
   async addTransaction (transaction: Transaction): Promise<void> {
     const lastTransaction = await this.getLastTransaction();
