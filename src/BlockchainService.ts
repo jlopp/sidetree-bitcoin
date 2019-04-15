@@ -92,7 +92,6 @@ export default class BlockchainService {
                 await this.transactionStore.addTransaction(transaction);
               }
               this.lastKnownTransaction = await this.transactionStore.getLastTransaction();
-              console.info('lastKnownTransaction' + JSON.stringify(this.lastKnownTransaction));
             }
           } else if (readResult.status === ResponseStatus.BadRequest) {
             const readResultBody = readResult.body as any;
